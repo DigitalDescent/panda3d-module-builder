@@ -42,8 +42,10 @@ runs:
     - name: Prepare config.ini
       shell: bash
       run: |
-        if ! grep -q "^module_name=" config.ini; then
-          echo -e "\nmodule_name=CI_TEST\n" >> config.ini
+        if ! grep -qP "^module_name=.+" config.ini; then
+          sed -i 's/^module_name=.*/module_name=CI_TEST/' config.ini
+          # If the key didn't exist at all, append it
+          grep -q "^module_name=" config.ini || echo "module_name=CI_TEST" >> config.ini
         fi
 
     - name: Build wheel
