@@ -12,29 +12,29 @@ runs:
       shell: bash
       run: pip install build "setuptools>=64" wheel
 
-    - name: Determine version from git
+    - name: Compute semantic version
+      id: semver
+      uses: paulhatch/semantic-version@v5.4.0
+      with:
+        tag_prefix: "v"
+        major_pattern: "/!:|BREAKING CHANGE:/"
+        minor_pattern: "/feat(\\(.+\\))?:/"
+        version_format: "${major}.${minor}.${patch}"
+
+    # Determine the version to build. If we're building a tagged release, use the tag as the version.
+    # Otherwise, use the computed semantic version with a .dev suffix to indicate a pre-release.
+    - name: Determine build version
       id: version
       shell: bash
       run: |
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          # Tags are published as stable versions (e.g. 1.2.3).
           VERSION="${GITHUB_REF#refs/tags/v}"
         else
-          # git describe gives e.g. "v1.63.5-2-g8a818b1" → convert to PEP 440
-          # dev version: bump patch and add .devN  →  "1.63.6.dev2"
-          RAW=$(git describe --tags --match 'v*' 2>/dev/null | sed 's/^v//' || echo "")
-          if [[ "$RAW" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)-g.+$ ]]; then
-            MAJOR="${BASH_REMATCH[1]}"
-            MINOR="${BASH_REMATCH[2]}"
-            PATCH=$(( ${BASH_REMATCH[3]} + 1 ))
-            DEV="${BASH_REMATCH[4]}"
-            VERSION="${MAJOR}.${MINOR}.${PATCH}.dev${DEV}"
-          elif [[ -n "$RAW" ]]; then
-            VERSION="$RAW"
-          else
-            VERSION="0.0.0"
-          fi
+          # Branch builds are published as pre-releases (e.g. 1.2.4.dev3).
+          VERSION="${{ steps.semver.outputs.version }}.dev${{ steps.semver.outputs.increment }}"
         fi
-        echo "version=$VERSION"
+        echo "Resolved package version: $VERSION"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
     # If the config.ini file does not currently have a module_name entry, add one 
