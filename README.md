@@ -134,3 +134,6 @@ set(LIBRARIES "${LIBRARIES};${PROTOBUF_LIBRARIES}")
 
 ```
 
+## License
+
+This project is licensed under the [MIT License](LICENSE).
