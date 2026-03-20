@@ -13,7 +13,7 @@ It generates Python bindings for your C++ code and packages the result as an ins
  - Automatic Python bindings using `interrogate`
  - Builds as a standard Python wheel via `pip` / `python -m build`
  - Works on Windows, Linux and Mac
- - Python 3.9 – 3.14
+ - Python 10 – 3.14
 
 ## Getting started
 
@@ -96,7 +96,7 @@ print(example.get_answer()) # prints 42
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - The [Panda3D](https://www.panda3d.org/) SDK (not the pip package — the SDK headers are needed for compilation)
 - [CMake](https://cmake.org/download/) 3.16 or higher
 - A C++ compiler matching your Panda3D build:
