@@ -1,6 +1,6 @@
-[![Build Status](https://travis-ci.org/tobspr/P3DModuleBuilder.svg?branch=master)](https://travis-ci.org/tobspr/P3DModuleBuilder)
-
 # Panda3D Module Builder
+
+<img src="https://avatars2.githubusercontent.com/u/590956?v=3&s=500" align="right" width="200" />
 
 This tool allows you to seamlessly mix your C++ and Python code for the 
 <a href="http://github.com/panda3d/panda3d">Panda3D Game Engine</a>.

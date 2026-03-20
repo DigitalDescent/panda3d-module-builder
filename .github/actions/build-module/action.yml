@@ -42,8 +42,9 @@ runs:
     - name: Prepare config.ini
       shell: bash
       run: |
-        if ! grep -qP "^module_name=.+" config.ini; then
-          sed -i 's/^module_name=.*/module_name=CI_TEST/' config.ini
+        if ! grep -qE "^module_name=.+" config.ini; then
+          sed -i.bak 's/^module_name=.*/module_name=CI_TEST/' config.ini
+          rm -f config.ini.bak
           # If the key didn't exist at all, append it
           grep -q "^module_name=" config.ini || echo "module_name=CI_TEST" >> config.ini
         fi
