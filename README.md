@@ -6,12 +6,14 @@ Panda3D Module Builder
 This tool allows you to seamlessly mix your C++ and Python code for the 
 <a href="http://github.com/panda3d/panda3d">Panda3D Game Engine</a>.
 
-It makes compiling your C++ code the matter of a single mouse-click.
+It generates Python bindings for your C++ code and packages the result as an installable Python wheel.
 
 
 ### Features
  - Automatic Python bindings using `interrogate`
+ - Builds as a standard Python wheel via `pip` / `python -m build`
  - Works on Windows, Linux and Mac
+ - Python 3.9 – 3.14
 
 ## Getting started
 
@@ -21,7 +23,12 @@ It makes compiling your C++ code the matter of a single mouse-click.
 You can use the download-zip button, or clone this repository. Copy it to a
 suitable path in your project.
 
-#### 2. Write your source code
+#### 2. Configure `config.ini`
+
+Set `module_name` to the name you want for your module (e.g. `TestModule`).
+You can also set a `description`.
+
+#### 3. Write your source code
 
 You can now start to write your C++ code and store it in the `source/` directory.
 Here's a simple example you can start with (save it as `source/example.h` for example):
@@ -53,14 +60,24 @@ class ExampleClass {
 #endif EXAMPLE_H
 ```
 
-#### 3. Compile the module
+#### 4. Build the module
 
-After you wrote your C++ code, run `python build.py`. It will ask you for
-a module name, for this example we will choose "TestModule".
+Build and install directly into your environment:
 
-When the compilation finished, there should now be a `TestModule.pyd` / `TestModule.so` (depending on your platform) generated.
+```bash
+pip install .
+```
 
-#### 4. Use your module
+Or build a distributable wheel:
+
+```bash
+pip install build
+python -m build --wheel
+```
+
+The wheel will be placed in the `dist/` directory.
+
+#### 5. Use your module
 
 Using your compiled module is straightforward:
 
@@ -77,47 +94,37 @@ print(example.get_answer()) # prints 42
 ```
 
 
-
-#### 
-
 ## Requirements
 
-- The Panda3D SDK (get it <a href="http://www.panda3d.org/download.php?sdk">here</a>)
-- CMake 2.6 or higher (get it <a href="https://cmake.org/download/">here</a>)
-- windows only: The thirdparty folder installed in the Panda3D sdk folder (See <a href="https://www.panda3d.org/forums/viewtopic.php?f=9&t=18775">here</a>)
+- Python 3.9+
+- The [Panda3D](https://www.panda3d.org/) SDK (not the pip package — the SDK headers are needed for compilation)
+- [CMake](https://cmake.org/download/) 3.16 or higher
+- A C++ compiler matching your Panda3D build:
 
-
-**For compiling on Windows 32 bit:**
-
-- Visual Studio 2010/2015
-
-**For compiling on Windows 64 bit:**
-
-- Visual Studio 2010/2015
-- Windows SDK 7.1 (be sure to tick the VC++ 64 bit compilers option)
+| Platform | Compiler |
+|---|---|
+| Windows | Visual Studio 2015 – 2022 (must match the Panda3D SDK) |
+| Linux | GCC / Clang |
+| macOS | Xcode / Clang |
 
 
 ## Advanced configuration
 
-**Please clean up your built directories after changing the configuration! You can
-do so with passing `--clean` in the command line.**
-
-
-### Command Line
-Command line options are:
-
-- `--optimize=N` to override the optimize option. This overrides the option set in the `config.ini`
-- `--clean` to force a clean rebuild
+**After changing the configuration, delete the build output directory so that
+CMake picks up the new settings on the next build.**
 
 ### config.ini
-Further adjustments can be made in the `config.ini` file:
 
-- You can set `generate_pdb` to `0` or `1` to control whether a `.pdb` file is generated.
-- You can set `optimize` to change the optimization. This has to match the `--optimize=` option of your Panda3D Build.
-- You can set `require_lib_eigen` to `1` to require the Eigen 3 library
-- You can set `require_lib_bullet` to `1` to require the Bullet library
-- You can set `require_lib_freetype` to `1` to require the Freetype library
-- You can set `verbose_igate` to `1` or `2` to get detailed interrogate output (1 = verbose, 2 = very verbose)
+All build options are set in `config.ini`:
+
+- `module_name` — Name of the compiled module (required).
+- `description` — Short description included in the wheel metadata.
+- `optimize` — Optimization level (default `3`). Should match the `--optimize=` level your Panda3D was built with.
+- `generate_pdb` — Set to `1` to generate a `.pdb` debug-info file (Windows only).
+- `require_lib_eigen` — Set to `1` to require the Eigen 3 library.
+- `require_lib_bullet` — Set to `1` to require the Bullet physics library.
+- `require_lib_freetype` — Set to `1` to require the FreeType library.
+- `verbose_igate` — Set to `1` or `2` for detailed interrogate output (1 = verbose, 2 = very verbose).
 
 ### Additional libaries
 
