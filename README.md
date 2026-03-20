@@ -1,4 +1,5 @@
-# Panda3D Module Builder
+Panda3D Module Builder
+===========================
 
 <img src="https://avatars2.githubusercontent.com/u/590956?v=3&s=500" align="right" width="200" />
 
@@ -8,8 +9,7 @@ This tool allows you to seamlessly mix your C++ and Python code for the
 It makes compiling your C++ code the matter of a single mouse-click.
 
 
-## Features
-
+### Features
  - Automatic Python bindings using `interrogate`
  - Works on Windows, Linux and Mac
 
