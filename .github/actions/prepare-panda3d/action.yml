@@ -1,0 +1,127 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Composite action – Install build tools, build & cache Panda3D from source,
+# and prepare the SDK environment (PATH, thirdparty junctions).
+# ──────────────────────────────────────────────────────────────────────────────
+name: Prepare Panda3D SDK
+description: >
+  Build (or restore from cache) a Panda3D SDK from source and add it to PATH.
+
+inputs:
+  panda3d-ref:
+    description: "Panda3D git ref (branch / tag / SHA)"
+    required: true
+  p3d-tools-ver:
+    description: "Panda3D thirdparty tools version (for Windows & macOS deps)"
+    required: true
+  python-version:
+    description: "Python version string (used in the cache key)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install build tools (Ubuntu)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential cmake bison flex \
+          libeigen3-dev libfreetype6-dev libjpeg-dev libpng-dev \
+          libssl-dev libvorbis-dev zlib1g-dev \
+          libgl1-mesa-dev libegl1-mesa-dev libx11-dev libxrandr-dev
+
+    - name: Install build tools (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install cmake eigen
+        sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
+    - name: Cache Panda3D build
+      id: cache-panda3d
+      uses: actions/cache@v5
+      with:
+        path: panda3d-src/built
+        key: panda3d-built-${{ runner.os }}-py${{ inputs.python-version }}-${{ inputs.panda3d-ref }}-v1
+
+    - name: Clone Panda3D
+      if: steps.cache-panda3d.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: panda3d/panda3d
+        ref: ${{ inputs.panda3d-ref }}
+        path: panda3d-src
+        fetch-depth: 1
+
+    - name: Download Panda3D thirdparty (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        if (!(Test-Path "panda3d-src\thirdparty\win-libs-vc14-x64")) {
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest `
+            -Uri "https://www.panda3d.org/download/panda3d-${{ inputs.p3d-tools-ver }}/panda3d-${{ inputs.p3d-tools-ver }}-tools-win64.zip" `
+            -OutFile thirdparty.zip
+          Expand-Archive -Path thirdparty.zip -DestinationPath thirdparty-extract
+          New-Item -ItemType Directory -Force -Path panda3d-src | Out-Null
+          if (Test-Path "panda3d-src\thirdparty") {
+            Remove-Item -Recurse -Force "panda3d-src\thirdparty"
+          }
+          Move-Item "thirdparty-extract\panda3d-${{ inputs.p3d-tools-ver }}\thirdparty" "panda3d-src\"
+        }
+
+    - name: Download Panda3D thirdparty (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        if [ ! -d "panda3d-src/thirdparty/darwin-libs-a" ]; then
+          curl -sLO "https://www.panda3d.org/download/panda3d-${{ inputs.p3d-tools-ver }}/panda3d-${{ inputs.p3d-tools-ver }}-tools-mac.tar.gz"
+          tar -xf "panda3d-${{ inputs.p3d-tools-ver }}-tools-mac.tar.gz"
+          mv "panda3d-${{ inputs.p3d-tools-ver }}/thirdparty" panda3d-src/thirdparty
+          # Fix Cg dylib id so pzip can run during the build.
+          install_name_tool -id \
+            "$(pwd)/panda3d-src/thirdparty/darwin-libs-a/nvidiacg/lib/libCg.dylib" \
+            panda3d-src/thirdparty/darwin-libs-a/nvidiacg/lib/libCg.dylib 2>/dev/null || true
+        fi
+
+    # ── Build Panda3D from source ──────────────────────────────────────────
+    - name: Build Panda3D
+      if: steps.cache-panda3d.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cd panda3d-src
+        python makepanda/makepanda.py \
+          --outputdir built \
+          --everything --no-eigen \
+          --python-incdir="$pythonLocation/include" \
+          --python-libdir="$pythonLocation/lib" \
+          --verbose --threads=4 \
+          ${{ runner.os == 'Windows' && '--windows-sdk=10 --msvc-version=14.3' || '' }}
+
+    # ── Prepare SDK environment ────────────────────────────────────────────
+    - name: Add Panda3D to PATH
+      shell: bash
+      run: |
+        echo "$GITHUB_WORKSPACE/panda3d-src/built/bin" >> "$GITHUB_PATH"
+
+    - name: Create thirdparty compatibility junctions (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $realTP = (Resolve-Path "panda3d-src\thirdparty\win-libs-vc14-x64").Path
+        $builtTPDir = "panda3d-src\built\thirdparty"
+        $link = "$builtTPDir\win-libs"
+
+        if (Test-Path $builtTPDir) {
+          $item = Get-Item $builtTPDir -Force
+          if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            $item.Delete()
+          }
+        }
+        New-Item -ItemType Directory -Force -Path $builtTPDir | Out-Null
+
+        if (!(Test-Path $link)) {
+          New-Item -ItemType Junction -Path $link -Target $realTP | Out-Null
+        }
+        Write-Host "Junction: $link -> $realTP"

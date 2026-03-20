@@ -1,0 +1,136 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# CI / CD – Build Panda3D from source (cached), compile wheels,
+# and publish to PyPI on tagged releases.
+#
+# Inspired by the panda3d CI workflow.  Each (os × python-version) job
+# builds a minimal Panda3D SDK from source, caches it, then compiles the wheel 
+# against that SDK.
+# ──────────────────────────────────────────────────────────────────────────────
+name: Build and Publish
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      panda3d_ref:
+        description: "Panda3D git ref (branch / tag / SHA)"
+        default: "release/1.10.x"
+        type: string
+
+env:
+  # Panda3D source to build against.  Override via workflow_dispatch input.
+  PANDA3D_REF: ${{ inputs.panda3d_ref || 'release/1.10.x' }}
+  # Panda3D thirdparty tools version (for Windows & macOS native deps).
+  P3D_TOOLS_VER: "1.10.16"
+
+permissions:
+  contents: write
+
+# ══════════════════════════════════════════════════════════════════════════════
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Build wheels  –  one job per (platform × Python version)
+  # ────────────────────────────────────────────────────────────────────────────
+  build:
+    name: "${{ matrix.os }} / py${{ matrix.python-version }}"
+    if: >-
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[ci skip]')
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, macOS-15]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0           # setuptools-scm needs full history + tags
+
+    - name: Setup Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Prepare Panda3D SDK
+      uses: ./.github/actions/prepare-panda3d
+      with:
+        panda3d-ref: ${{ env.PANDA3D_REF }}
+        p3d-tools-ver: ${{ env.P3D_TOOLS_VER }}
+        python-version: ${{ matrix.python-version }}
+
+    - name: Build Module
+      uses: ./.github/actions/build-module
+
+    - name: Upload wheel artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheel-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: dist/*.whl
+        if-no-files-found: error
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Publish to PyPI (tagged releases only)
+  # ────────────────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      id-token: write          # required for trusted publishing
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/panda3d-pipes/
+
+    steps:
+    - name: Download all wheel artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: dist
+        pattern: wheel-*
+        merge-multiple: true
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: dist/
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # GitHub Release (tagged releases only)
+  # ────────────────────────────────────────────────────────────────────────────
+  github-release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write          # required to create releases
+
+    steps:
+    - name: Download all wheel artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: dist
+        pattern: wheel-*
+        merge-multiple: true
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: ${{ github.ref_name }}
+        generate_release_notes: true
+        files: dist/*.whl

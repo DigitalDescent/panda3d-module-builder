@@ -1,0 +1,74 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Composite action – Install build tools and compile the module from source.
+# ──────────────────────────────────────────────────────────────────────────────
+name: Prepare Panda3D SDK
+description: >
+  Builds the Panda3D module from source.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Python build tools
+      shell: bash
+      run: pip install build "setuptools>=64" wheel
+
+    - name: Determine version from git
+      id: version
+      shell: bash
+      run: |
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/v}"
+        else
+          # git describe gives e.g. "v1.63.5-2-g8a818b1" → convert to PEP 440
+          # dev version: bump patch and add .devN  →  "1.63.6.dev2"
+          RAW=$(git describe --tags --match 'v*' 2>/dev/null | sed 's/^v//' || echo "")
+          if [[ "$RAW" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)-g.+$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH=$(( ${BASH_REMATCH[3]} + 1 ))
+            DEV="${BASH_REMATCH[4]}"
+            VERSION="${MAJOR}.${MINOR}.${PATCH}.dev${DEV}"
+          elif [[ -n "$RAW" ]]; then
+            VERSION="$RAW"
+          else
+            VERSION="0.0.0"
+          fi
+        fi
+        echo "version=$VERSION"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+    # If the config.ini file does not currently have a module_name entry, add one 
+    # with a placeholder value of CI_TEST for module builder testing.
+    - name: Prepare config.ini
+      shell: bash
+      run: |
+        if ! grep -q "^module_name=" config.ini; then
+          echo -e "\nmodule_name=CI_TEST\n" >> config.ini
+        fi
+
+    - name: Build wheel
+      shell: bash
+      env:
+        SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
+        PYTHONPATH: ${{ github.workspace }}/panda3d-src/built
+        LD_LIBRARY_PATH: ${{ github.workspace }}/panda3d-src/built/lib
+        DYLD_LIBRARY_PATH: ${{ github.workspace }}/panda3d-src/built/lib
+      run: python -m build --wheel
+
+    # PyPI rejects bare "linux_x86_64" tags; auditwheel converts them to
+    # the appropriate manylinux tag.
+    - name: Repair wheel (Linux - auditwheel)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        pip install auditwheel patchelf
+        mkdir -p dist-repaired
+        # Use the glibc version from the build host (Ubuntu 24.04 → glibc 2.39)
+        GLIBC_VER=$(ldd --version | head -1 | grep -oP '\d+\.\d+$')
+        MANYLINUX="manylinux_${GLIBC_VER//./_}_x86_64"
+        echo "Targeting platform tag: $MANYLINUX"
+        auditwheel repair dist/*.whl \
+          --plat "$MANYLINUX" \
+          -w dist-repaired
+        rm -rf dist
+        mv dist-repaired dist
