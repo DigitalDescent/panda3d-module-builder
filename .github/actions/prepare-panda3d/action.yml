@@ -85,7 +85,6 @@ runs:
             panda3d-src/thirdparty/darwin-libs-a/nvidiacg/lib/libCg.dylib 2>/dev/null || true
         fi
 
-    # ── Build Panda3D from source ──────────────────────────────────────────
     - name: Build Panda3D
       if: steps.cache-panda3d.outputs.cache-hit != 'true'
       shell: bash
@@ -99,7 +98,6 @@ runs:
           --verbose --threads=4 \
           ${{ runner.os == 'Windows' && '--windows-sdk=10 --msvc-version=14.3' || '' }}
 
-    # ── Prepare SDK environment ────────────────────────────────────────────
     - name: Add Panda3D to PATH
       shell: bash
       run: |
