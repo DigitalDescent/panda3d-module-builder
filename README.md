@@ -20,7 +20,9 @@ It generates Python bindings for your C++ code and packages the result as an ins
 
 #### 1. Clone this repository
 
-You can use the download-zip button, or clone this repository. It is recommended you create a new repository using this one as the template.
+You can use the download-zip button, or clone this repository. 
+
+Typically it is recommended you create a new repository using this one as the template.
 This ensures you immediately have access to the CI workflows for automating your wheel builds and publishing to pypi.
 
 #### 2. Configure `config.ini`
