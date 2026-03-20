@@ -79,8 +79,10 @@ def run_cmake(config, args):
         interrogatedb_lib = lib_prefix + "p3interrogatedb"
         if is_windows():
             interrogatedb_path = join_abs(get_panda_lib_path(), interrogatedb_lib + ".lib")
+        elif is_macos():
+            interrogatedb_path = join_abs(get_panda_lib_path(), "libp3interrogatedb.dylib")
         else:
-            interrogatedb_path = join_abs(get_panda_lib_path(), interrogatedb_lib + ".so")
+            interrogatedb_path = join_abs(get_panda_lib_path(), "libp3interrogatedb.so")
 
         if isfile(interrogatedb_path):
             cmake_args += ["-DINTERROGATE_LIB:STRING=" + interrogatedb_lib]
